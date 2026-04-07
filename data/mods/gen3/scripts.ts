@@ -15,6 +15,27 @@ export const Scripts: ModdedBattleScriptsData = {
 	},
 	pokemon: {
 		inherit: true,
+		deductPP(move, amount) {
+			// a lot of checks just to make sure the move slot is always available
+			const moveSlot = (move as ActiveMove).moveSlot;
+			if (typeof moveSlot !== 'number') {
+				throw new Error(`Non-locked move ${move} doesn't have a move slot - cannot deduct PP!`);
+			}
+			const ppData = this.getMoveSlot(moveSlot);
+			if (!ppData) {
+				throw new Error(`Move slot ${moveSlot} does not exist on this Pokémon - cannot deduct PP!`);
+			}
+			if (ppData.id !== toID(move)) {
+				throw new Error(`Move slot ${moveSlot} contains ${ppData.id}, not ${toID(move)} - cannot deduct PP!`);
+			}
+			ppData.used = true;
+			if (!ppData.pp) return 0;
+
+			if (!amount) amount = 1;
+			amount = Math.min(amount, ppData.pp);
+			ppData.pp -= amount;
+			return amount;
+		},
 		getActionSpeed() {
 			let speed = this.getStat('spe', false, false);
 			const trickRoomCheck = this.battle.ruleTable.has('twisteddimensionmod') ?

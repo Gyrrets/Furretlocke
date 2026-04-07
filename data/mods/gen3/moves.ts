@@ -256,6 +256,32 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 			durationCallback() {
 				return this.random(3, 7);
 			},
+			onStart(target) {
+				let move: Move | ActiveMove | null = target.lastMove;
+				if (!move || target.volatiles['dynamax']) return false;
+
+				// Encore only works on Max Moves if the base move is not itself a Max Move
+				if (move.isMax && move.baseMove) move = this.dex.moves.get(move.baseMove);
+				const moveIndex = typeof (move as ActiveMove)?.moveSlot === 'number' ?
+					((move as ActiveMove).moveSlot!) : target.moves.indexOf(move.id);
+				if (move.isZ || move.isMax || move.flags['failencore'] || moveIndex < 0 || target.moveSlots[moveIndex].pp <= 0) {
+					// it failed
+					return false;
+				}
+				this.effectState.move = move.id;
+				this.effectState.slotIndex = moveIndex;
+				this.add('-start', target, 'Encore');
+				if (!this.queue.willMove(target)) {
+					this.effectState.duration!++;
+				}
+			},
+			onResidual(target) {
+				const moveSlot = target.moveSlots[this.effectState.slotIndex];
+				if (!moveSlot || moveSlot.pp <= 0) {
+					// early termination if you run out of PP
+					target.removeVolatile('encore');
+				}
+			},
 		},
 	},
 	extrasensory: {
@@ -403,6 +429,28 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 	mimic: {
 		inherit: true,
 		flags: { protect: 1, bypasssub: 1, allyanim: 1, failencore: 1, noassist: 1, failmimic: 1 },
+		onHit(target, source, move) {
+			if (source.transformed || !target.lastMove || target.volatiles['substitute']) {
+				return false;
+			}
+			if (target.lastMove.flags['failmimic'] || source.moves.includes(target.lastMove.id)) {
+				return false;
+			}
+			const mimicIndex = typeof move.moveSlot === 'number' ? move.moveSlot : source.moves.indexOf('mimic');
+			if (mimicIndex < 0) return false;
+			const lastMove = this.dex.moves.get(target.lastMove.id);
+			source.moveSlots[mimicIndex] = {
+				move: lastMove.name,
+				id: lastMove.id,
+				pp: 5,
+				maxpp: lastMove.pp * 8 / 5,
+				target: lastMove.target,
+				disabled: false,
+				used: false,
+				virtual: true,
+			};
+			this.add('-activate', source, 'move: Mimic', lastMove.name);
+		},
 	},
 	mirrorcoat: {
 		inherit: true,
@@ -522,6 +570,29 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 	sketch: {
 		inherit: true,
 		flags: { bypasssub: 1, failencore: 1, noassist: 1, failmimic: 1, nosketch: 1 },
+		onHit(target, source, move) {
+			if (source.transformed || !target.lastMove || target.volatiles['substitute']) {
+				return false;
+			}
+			if (target.lastMove.flags['nosketch'] || source.moves.includes(target.lastMove.id)) {
+				return false;
+			}
+			const sketchIndex = typeof move.moveSlot === 'number' ? move.moveSlot : source.moves.indexOf('sketch');
+			if (sketchIndex < 0) return false;
+			const lastMove = this.dex.moves.get(target.lastMove.id);
+			const sketchedMove = {
+				move: lastMove.name,
+				id: lastMove.id,
+				pp: lastMove.pp,
+				maxpp: lastMove.pp,
+				target: lastMove.target,
+				disabled: false,
+				used: false,
+			};
+			source.moveSlots[sketchIndex] = sketchedMove;
+			source.baseMoveSlots[sketchIndex] = sketchedMove;
+			this.add('-activate', source, 'move: Sketch', lastMove.name);
+		},
 	},
 	sleeptalk: {
 		inherit: true,
@@ -549,9 +620,19 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 	spite: {
 		inherit: true,
 		onHit(target) {
+			let move = target.lastMove;
+			if (!move) return false;
+
+			// we need to get the first instance of the move used
+			// and put the move slot in an ActiveMove object
+			const moveSlot = target.moves.indexOf(move.id);
+			if (moveSlot < 0) return false;
+			move = this.dex.getActiveMove(move.id);
+			move.moveSlot = moveSlot;
+
 			const roll = this.random(2, 6);
-			if (target.lastMove && target.deductPP(target.lastMove.id, roll)) {
-				this.add("-activate", target, 'move: Spite', target.lastMove.id, roll);
+			if (target.deductPP(move, roll)) {
+				this.add("-activate", target, 'move: Spite', move.id, roll);
 				return;
 			}
 			return false;

@@ -15,7 +15,7 @@ interface MoveSlot {
 	move: string;
 	pp: number;
 	maxpp: number;
-	target?: string;
+	target: string;
 	disabled: boolean | 'hidden';
 	disabledSource?: string;
 	used: boolean;
@@ -886,7 +886,7 @@ export class Pokemon {
 		return !this.getItem().ignoreKlutz && this.hasAbility('klutz');
 	}
 
-	deductPP(move: string | Move, amount?: number | null, target?: Pokemon | null | false) {
+	deductPP(move: string | Move, amount?: number | null) {
 		move = this.battle.dex.moves.get(move);
 		const ppData = this.getMoveData(move);
 		if (!ppData) return 0;
@@ -894,11 +894,8 @@ export class Pokemon {
 		if (!ppData.pp) return 0;
 
 		if (!amount) amount = 1;
+		amount = Math.min(amount, ppData.pp);
 		ppData.pp -= amount;
-		if (ppData.pp < 0) {
-			amount += ppData.pp;
-			ppData.pp = 0;
-		}
 		return amount;
 	}
 
@@ -993,7 +990,7 @@ export class Pokemon {
 			switch (moveSlot.id) {
 			case 'curse':
 				if (!this.hasType('Ghost')) {
-					target = this.battle.dex.moves.get('curse').nonGhostTarget;
+					target = 'self';
 				}
 				break;
 			case 'pollenpuff':
@@ -1626,6 +1623,18 @@ export class Pokemon {
 				moveSlot.disabled = isHidden ? 'hidden' : true;
 				moveSlot.disabledSource = sourceEffect?.name || moveSlot.move;
 			}
+		}
+	}
+
+	disableSlot(slotIndex: number, isHidden?: boolean, sourceEffect?: Effect) {
+		if (!sourceEffect && this.battle.event) {
+			sourceEffect = this.battle.effect;
+		}
+		if (slotIndex < 0 || slotIndex >= this.moveSlots.length) return;
+		const moveSlot = this.moveSlots[slotIndex];
+		if (moveSlot && moveSlot.disabled !== true) {
+			moveSlot.disabled = isHidden ? 'hidden' : true;
+			moveSlot.disabledSource = sourceEffect?.name || moveSlot.move;
 		}
 	}
 
