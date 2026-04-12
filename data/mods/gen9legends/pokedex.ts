@@ -11,4 +11,20 @@ export const Pokedex: import('../../../sim/dex-species').ModdedSpeciesDataTable 
 		inherit: true,
 		baseStats: { hp: 60, atk: 140, def: 85, spa: 80, spd: 85, spe: 100 },
 	},
+	runerigus: {
+		inherit: true,
+		evoType: "other",
+		evoCondition: "Take 49+ damage w/o fainting and stand under a bridge at Coulant Waterway",
+	},
+	overqwil: {
+		inherit: true,
+		evoType: "other",
+		evoCondition: "Land 20 hits with Barb Barrage",
+	},
+	annihilape: {
+		inherit: true,
+		// Technically incorrect, as Primeape only needs to use Rage Fist 20 times to evolve. Documented this way for validation purposes.
+		evoLevel: 35,
+		evoCondition: "after using Rage Fist 20 times",
+	},
 };
