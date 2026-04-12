@@ -43,6 +43,13 @@ export interface GameTimerSettings {
 	accelerate: boolean;
 }
 
+export interface RuleTableBuildContext {
+	format: Format;
+	ruleTable: RuleTable;
+	dex: ModdedDex;
+	rule: Format;
+}
+
 /**
  * A RuleTable keeps track of the rules that a format has. The key can be:
  * - '[ruleid]' the ID of a rule in effect
@@ -286,14 +293,14 @@ export class RuleTable extends Map<string, string> {
 		}
 		if (Object.keys(timer).length) this.timer = [timer, format.name];
 
-		if (this.valueRules.get('pickedteamsize') === 'Auto') {
+		if (this.valueRules.get('pickedteamsize') === 'auto') {
 			this.pickedTeamSize = (
 				['doubles', 'rotation'].includes(this.gameType) ? 4 :
 				this.gameType === 'triples' ? 6 :
 				3
 			);
 		}
-		if (this.valueRules.get('evlimit') === 'Auto') {
+		if (this.valueRules.get('evlimit') === 'auto') {
 			this.evLimit = dex.gen > 2 ? 510 : null;
 			if (format.mod === 'gen7letsgo') {
 				this.evLimit = this.has('lgpenormalrules') ? 0 : null;
@@ -459,9 +466,7 @@ export class Format extends BasicEffect implements Readonly<BasicEffect> {
 	 * Only applies to rules, not formats
 	 */
 	declare readonly valueType?: RuleValueType;
-	declare readonly onValidateRule?: (
-		this: { format: Format, ruleTable: RuleTable, dex: ModdedDex }, value: string
-	) => string | void;
+	declare readonly onValidateRule?: (this: RuleTableBuildContext, value: string) => string | void;
 	/** ID of rule that can't be combined with this rule */
 	declare readonly mutuallyExclusiveWith?: string;
 
@@ -784,13 +789,8 @@ export class DexFormats {
 		);
 	}
 
-	parseRuleValue(rule: Format, value: string, ruleSpec: string): string {
-		const valueType = rule.valueType as RuleValueType;
+	parseRuleValueInner(valueType: RuleValueType, value: string, ruleName: string, ruleSpec: string): string {
 		if (value === 'Current Gen') value = `${this.dex.gen}`;
-
-		if ((rule.id === 'pickedteamsize' || rule.id === 'evlimit') && value === 'Auto') {
-			return value;
-		}
 
 		if (valueType === 'integer' || valueType === 'positive-integer') {
 			const intValue = parseInt(value);
@@ -799,7 +799,7 @@ export class DexFormats {
 			}
 			if (valueType === 'positive-integer') {
 				if (intValue === 0) {
-					throw new Error(`In rule "${ruleSpec}", "${value}" must be positive (to remove it, use the rule "! ${rule.name}").`);
+					throw new Error(`In rule "${ruleSpec}", "${value}" must be positive (to remove it, use the rule "! ${ruleName}").`);
 				}
 				if (intValue <= 0) {
 					throw new Error(`In rule "${ruleSpec}", "${value}" must be positive.`);
@@ -817,6 +817,11 @@ export class DexFormats {
 		}
 
 		return value;
+	}
+
+	parseRuleValue(rule: Format, value: string, ruleSpec: string): string {
+		const valueType = rule.valueType!;
+		return this.parseRuleValueInner(valueType, value, rule.name, ruleSpec);
 	}
 
 	getRuleTable(format: Format, depth = 1, repeals?: Map<string, number>): RuleTable {
@@ -1050,7 +1055,7 @@ export class DexFormats {
 			const subFormat = this.dex.formats.get(rule);
 			if (subFormat.exists) {
 				const value = subFormat.onValidateRule?.call(
-					{ format, ruleTable, dex: this.dex }, ruleTable.valueRules.get(rule as ID)!
+					{ format, ruleTable, dex: this.dex, rule: subFormat }, ruleTable.valueRules.get(rule as ID)!
 				);
 				if (typeof value === 'string') ruleTable.valueRules.set(subFormat.id, value);
 			}

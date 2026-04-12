@@ -494,7 +494,7 @@ export const Rulesets: import('../sim/dex-formats').FormatDataTable = {
 		effectType: 'ValidatorRule',
 		name: 'Force Monotype',
 		desc: `Forces all teams to have the same type. Usage: Force Monotype = [Type], e.g. "Force Monotype = Water"`,
-		valueType: 'string',
+		valueType: 'identifier',
 		onValidateRule(value) {
 			const type = this.dex.types.get(value);
 			if (!type.exists) throw new Error(`Misspelled type "${value}"`);
@@ -522,15 +522,15 @@ export const Rulesets: import('../sim/dex-formats').FormatDataTable = {
 		effectType: 'ValidatorRule',
 		name: 'Force Monocolor',
 		desc: `Forces all teams to have Pok&eacute;mon of the same color. Usage: Force Monocolor = [Color], e.g. "Force Monocolor = Blue"`,
-		valueType: 'string',
+		valueType: 'identifier',
 		onValidateRule(value) {
-			const validColors = ["Black", "Blue", "Brown", "Gray", "Green", "Pink", "Purple", "Red", "White", "Yellow"];
-			if (!validColors.map(this.dex.toID).includes(this.dex.toID(value))) {
+			const validColors = ["black", "blue", "brown", "gray", "green", "pink", "purple", "red", "white", "yellow"];
+			if (!validColors.includes((value))) {
 				throw new Error(`Invalid color "${value}"`);
 			}
 		},
 		onValidateSet(set) {
-			const color = this.toID(this.ruleTable.valueRules.get('forcemonocolor'));
+			const color = this.ruleTable.valueRules.get('forcemonocolor');
 			let dex = this.dex;
 			if (dex.gen < 5) {
 				dex = dex.forGen(5);
@@ -545,7 +545,7 @@ export const Rulesets: import('../sim/dex-formats').FormatDataTable = {
 		effectType: 'ValidatorRule',
 		name: 'Force Tera Type',
 		desc: `Forces all Pok&eacute;mon to have the same Tera Type. Usage: Force Tera Type = [Type], e.g. "Force Tera Type = Dragon"`,
-		valueType: 'string',
+		valueType: 'identifier',
 		onValidateRule(value) {
 			if (this.dex.gen !== 9) {
 				throw new Error(`Terastallization doesn't exist outside of Generation 9.`);
@@ -567,7 +567,7 @@ export const Rulesets: import('../sim/dex-formats').FormatDataTable = {
 		effectType: 'ValidatorRule',
 		name: 'Force Select',
 		desc: `Forces a Pokemon to be on the team and selected at Team Preview. Usage: Force Select = [Pokemon], e.g. "Force Select = Magikarp"`,
-		valueType: 'string',
+		valueType: 'identifier',
 		onValidateRule(value) {
 			if (!this.dex.species.get(value).exists) throw new Error(`Misspelled Pokemon "${value}"`);
 		},
@@ -2063,7 +2063,11 @@ export const Rulesets: import('../sim/dex-formats').FormatDataTable = {
 		effectType: 'Rule',
 		name: 'Picked Team Size',
 		desc: "Team size (number of pokemon) that can be brought out of Team Preview",
-		valueType: 'positive-integer',
+		valueType: 'identifier',
+		onValidateRule(teamSize) {
+			if (teamSize === 'auto') return;
+			return this.dex.formats.parseRuleValueInner('positive-integer', teamSize, this.rule.name, `${this.rule.name} = ${teamSize}`);
+		},
 		// hardcoded in sim/side and sim/battle
 	},
 	minteamsize: {
@@ -2073,19 +2077,23 @@ export const Rulesets: import('../sim/dex-formats').FormatDataTable = {
 		valueType: 'positive-integer',
 		// hardcoded in sim/team-validator
 	},
-	evlimit: {
-		effectType: 'ValidatorRule',
-		name: "EV Limit",
-		desc: "Maximum total EVs on each pokemon.",
-		valueType: 'integer',
-		// hardcoded in sim/team-validator
-	},
 	maxteamsize: {
 		effectType: 'ValidatorRule',
 		name: "Max Team Size",
 		desc: "Maximum team size (number of pokemon) that can be brought into Team Preview (or into the battle, in formats without Team Preview)",
 		valueType: 'positive-integer',
 		// hardcoded in sim/team-validator
+	},
+	evlimit: {
+		effectType: 'ValidatorRule',
+		name: "EV Limit",
+		desc: "Maximum total EVs on each pokemon.",
+		valueType: 'identifier',
+		onValidateRule(maxEVs) {
+			if (maxEVs === 'auto') return;
+			return this.dex.formats.parseRuleValueInner('integer', maxEVs, this.rule.name, `${this.rule.name} = ${maxEVs}`);
+		},
+		// hardcoded in sim/side and sim/battle
 	},
 	maxmovecount: {
 		effectType: 'ValidatorRule',
@@ -2098,7 +2106,7 @@ export const Rulesets: import('../sim/dex-formats').FormatDataTable = {
 		effectType: 'Rule',
 		name: 'Game Type',
 		desc: "Sets the fielded Pokémon and player configuration (Singles, Doubles, Triples, Multi, Free For All)",
-		hasValue: 'identifier',
+		valueType: 'identifier',
 		onValidateRule(gameType) {
 			if (!this.dex.isSupportedGameType(gameType)) {
 				throw new Error(`Invalid game type "${gameType}". Showdown! supports: ${this.dex.getSupportedGameTypes().join(', ')}`);
