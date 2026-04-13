@@ -457,9 +457,8 @@ export class Pokemon {
 		this.beingCalledBack = false;
 
 		this.lastMove = null;
-		// This is used in gen 2 only, here to avoid code repetition.
-		// Only declared if gen 2 to avoid declaring an object we aren't going to need.
-		if (this.battle.gen === 2) this.lastMoveEncore = null;
+		// This is used in gen 2 only
+		this.lastMoveEncore = null;
 		this.lastMoveUsed = null;
 		this.moveThisTurn = '';
 		this.statsRaisedThisTurn = false;
@@ -907,8 +906,15 @@ export class Pokemon {
 	}
 
 	moveUsed(move: ActiveMove, targetLoc?: number) {
+		if (this.battle.gen === 2) {
+			if (['mimic', 'mirrormove', 'metronome', 'sketch', 'sleeptalk', 'transform'].includes(move.id)) {
+				this.lastMove = null;
+				this.lastMoveEncore = null;
+				return;
+			}
+			this.lastMoveEncore = move;
+		}
 		this.lastMove = move;
-		if (this.battle.gen === 2) this.lastMoveEncore = move;
 		this.lastMoveTargetLoc = targetLoc;
 		this.moveThisTurn = move.id;
 	}
