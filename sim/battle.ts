@@ -2578,6 +2578,7 @@ export class Battle {
 				pokemon.illusion = null;
 				pokemon.isActive = false;
 				pokemon.isStarted = false;
+				pokemon.draggedIn = null;
 				delete pokemon.terastallized;
 				if (pokemon.formeRegression) {
 					// after clearing volatiles
