@@ -1329,7 +1329,7 @@ export const Scripts: ModdedBattleScriptsData = {
 			}
 
 			let damage: number | false | undefined | '' = false;
-			if (move.target === 'all' || move.target === 'foeSide' || move.target === 'allySide' || move.target === 'allyTeam') {
+			if (['allySide', 'allyTeam', 'field', 'foeSide'].includes(move.target)) {
 				damage = this.tryMoveHit(targets, pokemon, move);
 				if (damage === this.battle.NOT_FAIL) pokemon.moveThisTurnResult = null;
 				if (damage || damage === 0 || damage === undefined) moveResult = true;
@@ -1597,7 +1597,7 @@ export const Scripts: ModdedBattleScriptsData = {
 			let hitResult: boolean | number | null = true;
 			const moveData = hitEffect || move;
 			if (!moveData.flags) moveData.flags = {};
-			if (move.target === 'all' && !isSelf) {
+			if (move.target === 'field' && !isSelf) {
 				hitResult = this.battle.singleEvent('TryHitField', moveData, {}, target || null, pokemon, move);
 			} else if ((move.target === 'foeSide' || move.target === 'allySide' || move.target === 'allyTeam') && !isSelf) {
 				hitResult = this.battle.singleEvent('TryHitSide', moveData, {}, target || null, pokemon, move);
@@ -1614,7 +1614,7 @@ export const Scripts: ModdedBattleScriptsData = {
 
 			// 0. check for substitute
 			if (!isSecondary && !isSelf) {
-				if (move.target !== 'all' && move.target !== 'allyTeam' && move.target !== 'allySide' && move.target !== 'foeSide') {
+				if (!['allySide', 'allyTeam', 'field', 'foeSide'].includes(move.target)) {
 					damage = this.tryPrimaryHitEvent(damage, targets, pokemon, move, moveData, isSecondary);
 				}
 			}
@@ -1724,6 +1724,7 @@ export const Scripts: ModdedBattleScriptsData = {
 
 			switch (move.target) {
 			case 'all':
+			case 'field':
 			case 'foeSide':
 			case 'allySide':
 			case 'allyTeam':
