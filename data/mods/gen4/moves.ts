@@ -508,6 +508,13 @@ export const Moves: import('../../../sim/dex-moves').ModdedMoveDataTable = {
 				return null;
 			}
 		},
+		condition: {
+			inherit: true,
+			onStart(pokemon) {
+				if (pokemon.status === 'slp' || (pokemon.hasAbility('truant') && pokemon.volatiles['truant'])) return;
+				this.add('-singleturn', pokemon, 'move: Focus Punch');
+			},
+		},
 	},
 	foresight: {
 		inherit: true,
