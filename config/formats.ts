@@ -2041,7 +2041,7 @@ export const Formats: import('../sim/dex-formats').FormatList = [
 		name: "[Gen 9] Linked",
 		desc: `The first two moves in a Pok&eacute;mon's moveset are used simultaneously.`,
 		mod: 'linked',
-		supportedGameTypes: ['singles'], // Targetting issues. E.g. Propeller Tail, Snipe Shot, Stalwart are not implemented (move.tracksTarget).
+		supportedGameTypes: 'any',
 		searchShow: false,
 		ruleset: ['Standard OMs', 'Sleep Moves Clause', 'Evasion Clause', 'Terastal Clause'],
 		banlist: [
