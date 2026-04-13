@@ -1621,12 +1621,18 @@ export const commands: Chat.ChatCommands = {
 	ebat: 'editbattle',
 	editbattle(target, room, user) {
 		room = this.requireRoom();
-		this.checkCan('forcewin');
 		if (!target) return this.parse('/help editbattle');
 		if (!room.battle) {
 			throw new Chat.ErrorMessage("/editbattle - This is not a battle room.");
 		}
 		const battle = room.battle;
+		const format = Dex.formats.get(battle.format, true);
+		const ruleTable = Dex.formats.getRuleTable(format);
+		if (ruleTable.has('editbattle')) {
+			this.checkCan('editprivacy', null, room);
+		} else {
+			this.checkCan('forcewin');
+		}
 		void battle.stream.write(`>editbattle user:${user.name}, ${target}`);
 	},
 	editbattlehelp: [
@@ -1639,9 +1645,11 @@ export const commands: Chat.ChatCommands = {
 		`/editbattle fieldcondition [fieldcondition]`,
 		`/editbattle weather [weather]`,
 		`/editbattle terrain [terrain]`,
+		`/editbattle basestats [player], [pokemon], [hp], [atk], [def], [spa], [spd], [spe]`,
 		`/editbattle reseed [optional seed]`,
-		`Short forms: /ebat h OR s OR pp OR b OR v OR sc OR fc OR w OR t`,
+		`Short forms: /ebat h OR s OR pp OR b OR v OR sc OR fc OR w OR t OR bs`,
 		`[player] must be a username or number, [pokemon] must be species name or party slot number (not nickname), [move] must be move name.`,
+		`Modified base stats must be integers within the stat limit (1-255).`,
 	],
 };
 

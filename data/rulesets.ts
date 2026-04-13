@@ -3257,4 +3257,10 @@ export const Rulesets: import('../sim/dex-formats').FormatDataTable = {
 			if (!speciesMods.length) throw new Error('This format has no rules that modify base stats.');
 		},
 	},
+	editbattle: {
+		effectType: "Rule",
+		name: "Edit Battle",
+		desc: "Allows players to edit battle details using `/editbattle`.",
+		// Implemented in chat-commands/admin.ts
+	},
 };
