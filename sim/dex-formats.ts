@@ -6,8 +6,16 @@ import { Tags } from '../data/tags';
 
 const DEFAULT_MOD = 'gen9';
 
-export interface FormatData extends Partial<Format>, EventMethods {
+export interface FormatData extends Partial<Omit<Format, 'supportedGameTypes'>>, EventMethods {
 	name: string;
+	supportedGameTypes?: GameType[] | 'any';
+
+	/**
+	 * @deprecated gameType - The preset game type for this format.
+	 *
+	 * Use defaultGameType instead.
+	 */
+	gameType?: GameType;
 }
 
 export type FormatList = (FormatData | { section: string, column?: number })[];
@@ -16,6 +24,8 @@ export interface FormatDataTable { [id: IDEntry]: FormatData }
 export interface ModdedFormatDataTable { [id: IDEntry]: ModdedFormatData }
 
 type FormatEffectType = 'Format' | 'Ruleset' | 'Rule' | 'ValidatorRule';
+
+type RuleValueType = 'string' | 'integer' | 'positive-integer' | 'identifier';
 
 /** rule, source, limit, bans */
 export type ComplexBan = [string, string, number, string[]];
@@ -31,6 +41,13 @@ export interface GameTimerSettings {
 	maxFirstTurn: number;
 	timeoutAutoChoose: boolean;
 	accelerate: boolean;
+}
+
+export interface RuleTableBuildContext {
+	format: Format;
+	ruleTable: RuleTable;
+	dex: ModdedDex;
+	rule: Format;
 }
 
 /**
@@ -51,6 +68,8 @@ export class RuleTable extends Map<string, string> {
 	tagRules: string[];
 	valueRules: Map<string, string>;
 
+	gameType!: GameType;
+	playerCount!: 2 | 4;
 	minTeamSize!: number;
 	maxTeamSize!: number;
 	pickedTeamSize!: number | null;
@@ -203,10 +222,15 @@ export class RuleTable extends Map<string, string> {
 		}
 	}
 
+	resolveGameType(format: Format, dex: ModdedDex) {
+		this.gameType = this.valueRules.get('gametype') as GameType || format.defaultGameType;
+		this.playerCount = (this.gameType === 'multi' || this.gameType === 'freeforall' ? 4 : 2);
+	}
+
 	/** After a RuleTable has been filled out, resolve its hardcoded numeric properties */
 	resolveNumbers(format: Format, dex: ModdedDex) {
-		const gameTypeMinTeamSize = ['triples', 'rotation'].includes(format.gameType as 'triples') ? 3 :
-			format.gameType === 'doubles' ? 2 :
+		const gameTypeMinTeamSize = ['triples', 'rotation'].includes(this.gameType) ? 3 :
+			this.gameType === 'doubles' ? 2 :
 			1;
 
 		// NOTE: These numbers are pre-calculated here because they're hardcoded
@@ -269,14 +293,14 @@ export class RuleTable extends Map<string, string> {
 		}
 		if (Object.keys(timer).length) this.timer = [timer, format.name];
 
-		if (this.valueRules.get('pickedteamsize') === 'Auto') {
+		if (this.valueRules.get('pickedteamsize') === 'auto') {
 			this.pickedTeamSize = (
-				['doubles', 'rotation'].includes(format.gameType) ? 4 :
-				format.gameType === 'triples' ? 6 :
+				['doubles', 'rotation'].includes(this.gameType) ? 4 :
+				this.gameType === 'triples' ? 6 :
 				3
 			);
 		}
-		if (this.valueRules.get('evlimit') === 'Auto') {
+		if (this.valueRules.get('evlimit') === 'auto') {
 			this.evLimit = dex.gen > 2 ? 510 : null;
 			if (format.mod === 'gen7letsgo') {
 				this.evLimit = this.has('lgpenormalrules') ? 0 : null;
@@ -316,17 +340,17 @@ export class RuleTable extends Map<string, string> {
 			}
 		}
 		if (this.minTeamSize && this.minTeamSize < gameTypeMinTeamSize) {
-			throw new Error(`Min team size ${this.minTeamSize}${this.blame('minteamsize')} must be at least ${gameTypeMinTeamSize} for a ${format.gameType} game.`);
+			throw new Error(`Min team size ${this.minTeamSize}${this.blame('minteamsize')} must be at least ${gameTypeMinTeamSize} for a ${this.gameType} game.`);
 		}
 		if (this.pickedTeamSize && this.pickedTeamSize < gameTypeMinTeamSize) {
-			throw new Error(`Chosen team size ${this.pickedTeamSize}${this.blame('pickedteamsize')} must be at least ${gameTypeMinTeamSize} for a ${format.gameType} game.`);
+			throw new Error(`Chosen team size ${this.pickedTeamSize}${this.blame('pickedteamsize')} must be at least ${gameTypeMinTeamSize} for a ${this.gameType} game.`);
 		}
 		if (this.minTeamSize && this.pickedTeamSize && this.minTeamSize < this.pickedTeamSize) {
 			throw new Error(`Min team size ${this.minTeamSize}${this.blame('minteamsize')} is lower than chosen team size ${this.pickedTeamSize}${this.blame('pickedteamsize')}.`);
 		}
 		if (!this.minTeamSize) this.minTeamSize = Math.max(gameTypeMinTeamSize, this.pickedTeamSize || 0);
 		if (this.maxTeamSize < gameTypeMinTeamSize) {
-			throw new Error(`Max team size ${this.maxTeamSize}${this.blame('maxteamsize')} must be at least ${gameTypeMinTeamSize} for a ${format.gameType} game.`);
+			throw new Error(`Max team size ${this.maxTeamSize}${this.blame('maxteamsize')} must be at least ${gameTypeMinTeamSize} for a ${this.gameType} game.`);
 		}
 		if (this.maxTeamSize < this.minTeamSize) {
 			throw new Error(`Max team size ${this.maxTeamSize}${this.blame('maxteamsize')} must be at least min team size ${this.minTeamSize}${this.blame('minteamsize')}.`);
@@ -414,9 +438,9 @@ export class Format extends BasicEffect implements Readonly<BasicEffect> {
 	 */
 	readonly rated: boolean | string;
 	/** Game type. */
-	readonly gameType: GameType;
-	/** Number of players, based on game type, for convenience */
-	readonly playerCount: 2 | 4;
+	readonly defaultGameType: GameType;
+	/** Game types that are compatible with this mod and event handlers. */
+	readonly supportedGameTypes: GameType[];
 	/** List of rule names. */
 	readonly ruleset: string[];
 	/**
@@ -441,10 +465,8 @@ export class Format extends BasicEffect implements Readonly<BasicEffect> {
 	/**
 	 * Only applies to rules, not formats
 	 */
-	declare readonly hasValue?: boolean | 'integer' | 'positive-integer';
-	declare readonly onValidateRule?: (
-		this: { format: Format, ruleTable: RuleTable, dex: ModdedDex }, value: string
-	) => string | void;
+	declare readonly valueType?: RuleValueType;
+	declare readonly onValidateRule?: (this: RuleTableBuildContext, value: string) => string | void;
 	/** ID of rule that can't be combined with this rule */
 	declare readonly mutuallyExclusiveWith?: string;
 
@@ -500,7 +522,8 @@ export class Format extends BasicEffect implements Readonly<BasicEffect> {
 		this.effectType = Utils.getString(data.effectType) as FormatEffectType || 'Condition';
 		this.debug = !!data.debug;
 		this.rated = (typeof data.rated === 'string' ? data.rated : data.rated !== false);
-		this.gameType = data.gameType || 'singles';
+		this.defaultGameType = data.defaultGameType || data.supportedGameTypes?.[0] || 'singles';
+		this.supportedGameTypes = data.supportedGameTypes || [this.defaultGameType];
 		this.ruleset = data.ruleset || [];
 		this.baseRuleset = data.baseRuleset || [];
 		this.banlist = data.banlist || [];
@@ -510,7 +533,6 @@ export class Format extends BasicEffect implements Readonly<BasicEffect> {
 		this.ruleTable = null;
 		this.onBegin = data.onBegin || undefined;
 		this.noLog = !!data.noLog;
-		this.playerCount = (this.gameType === 'multi' || this.gameType === 'freeforall' ? 4 : 2);
 		assignMissingFields(this, data);
 	}
 }
@@ -630,6 +652,29 @@ export class DexFormats {
 			if (format.mod === undefined) format.mod = 'gen9';
 			if (!this.dex.dexes[format.mod]) throw new Error(`Format "${format.name}" requires nonexistent mod: '${format.mod}'`);
 
+			let gameType = format.defaultGameType || format.gameType;
+			let supportedGameTypes = format.supportedGameTypes;
+			if (!gameType) {
+				gameType = (
+					Array.isArray(supportedGameTypes) && supportedGameTypes.length ?
+						supportedGameTypes[0] : 'singles'
+				);
+			}
+
+			if (supportedGameTypes === 'any' || (!supportedGameTypes && gameType !== format.gameType)) {
+				supportedGameTypes = this.dex.getSupportedGameTypes();
+			} else if (!supportedGameTypes) {
+				supportedGameTypes = [gameType];
+			} else if (!supportedGameTypes.includes(gameType)) {
+				// TS compiler takes care of most validation, but we still gotta check compatibility.
+				throw new Error(`Format "${format.name}" has incompatible game type definitions.`);
+			}
+
+			format.supportedGameTypes = supportedGameTypes;
+			format.defaultGameType = gameType;
+
+			this.checkDeprecated(format);
+
 			const ruleset = new Format(format);
 			this.rulesetCache.set(id, ruleset);
 			formatsList.push(ruleset);
@@ -637,6 +682,18 @@ export class DexFormats {
 
 		this.formatsListCache = formatsList;
 		return this;
+	}
+
+	checkDeprecated(format: AnyObject) {
+		if ('gameType' in format) {
+			/*
+			(global as any).Monitor?.warnDeprecated?.(
+				`"gameType" is deprecated in Formats. Please migrate to "defaultGameType" and "supportedGameTypes".`,
+				` (Used in "${format.name}")`
+			);
+			*/
+			throw new Error(`Gametype in Formats no longer supported.`);
+		}
 	}
 
 	/**
@@ -731,6 +788,42 @@ export class DexFormats {
 			ruleSpec.slice(1).startsWith('basepokemon:')
 		);
 	}
+
+	parseRuleValueInner(valueType: RuleValueType, value: string, ruleName: string, ruleSpec: string): string {
+		if (value === 'Current Gen') value = `${this.dex.gen}`;
+
+		if (valueType === 'integer' || valueType === 'positive-integer') {
+			const intValue = parseInt(value);
+			if (!Number.isSafeInteger(intValue)) {
+				throw new Error(`In rule "${ruleSpec}", "${value}" must be an integer number.`);
+			}
+			if (valueType === 'positive-integer') {
+				if (intValue === 0) {
+					throw new Error(`In rule "${ruleSpec}", "${value}" must be positive (to remove it, use the rule "! ${ruleName}").`);
+				}
+				if (intValue <= 0) {
+					throw new Error(`In rule "${ruleSpec}", "${value}" must be positive.`);
+				}
+			}
+			return `${intValue}`;
+		}
+
+		if (valueType === 'identifier') {
+			const identifier = toID(value);
+			if (!identifier.length) {
+				throw new Error(`In rule "${ruleSpec}", "${value}" must be alphanumeric.`);
+			}
+			return identifier;
+		}
+
+		return value;
+	}
+
+	parseRuleValue(rule: Format, value: string, ruleSpec: string): string {
+		const valueType = rule.valueType!;
+		return this.parseRuleValueInner(valueType, value, rule.name, ruleSpec);
+	}
+
 	getRuleTable(format: Format, depth = 1, repeals?: Map<string, number>): RuleTable {
 		if (format.ruleTable && !repeals) return format.ruleTable;
 		if (format.name.length > 50) {
@@ -834,32 +927,16 @@ export class DexFormats {
 			}
 
 			// rule
-			let [formatid, value] = ruleSpec.split('=');
-			const subformat = this.get(formatid);
+			const [rawRuleName, rawValue] = ruleSpec.split('=');
+			const subformat = this.get(rawRuleName);
 			const repealAndReplace = ruleSpec.startsWith('!!');
 			if (repeals?.has(subformat.id)) {
 				repeals.set(subformat.id, -Math.abs(repeals.get(subformat.id)!));
 				continue;
 			}
-			if (subformat.hasValue) {
-				if (value === undefined) throw new Error(`Rule "${ruleSpec}" should have a value (like "${ruleSpec} = something")`);
-				if (value === 'Current Gen') value = `${this.dex.gen}`;
-				if ((subformat.id === 'pickedteamsize' || subformat.id === 'evlimit') && value === 'Auto') {
-					// can't be resolved until later
-				} else if (subformat.hasValue === 'integer' || subformat.hasValue === 'positive-integer') {
-					const intValue = parseInt(value);
-					if (isNaN(intValue) || value !== `${intValue}`) {
-						throw new Error(`In rule "${ruleSpec}", "${value}" must be an integer number.`);
-					}
-				}
-				if (subformat.hasValue === 'positive-integer') {
-					if (parseInt(value) === 0) {
-						throw new Error(`In rule "${ruleSpec}", "${value}" must be positive (to remove it, use the rule "! ${subformat.name}").`);
-					}
-					if (parseInt(value) <= 0) {
-						throw new Error(`In rule "${ruleSpec}", "${value}" must be positive.`);
-					}
-				}
+			if (subformat.valueType) {
+				if (rawValue === undefined) throw new Error(`Rule "${ruleSpec}" should have a value (like "${ruleSpec} = something")`);
+				const value = this.parseRuleValue(subformat, rawValue, ruleSpec);
 
 				const oldValue = ruleTable.valueRules.get(subformat.id);
 				if (oldValue === value) {
@@ -889,7 +966,7 @@ export class DexFormats {
 				}
 				ruleTable.valueRules.set(subformat.id, value);
 			} else {
-				if (value !== undefined) throw new Error(`Rule "${ruleSpec}" should not have a value (no equals sign)`);
+				if (rawValue !== undefined) throw new Error(`Rule "${ruleSpec}" should not have a value (no equals sign)`);
 				if (repealAndReplace) throw new Error(`"!!" is not supported for this rule`);
 				if (ruleTable.has(subformat.id) && !repealAndReplace && !noWarn) {
 					throw new Error(`Rule "${ruleSpec}" in "${format.name}" already exists in "${ruleTable.get(subformat.id) || format.name}"`);
@@ -960,6 +1037,7 @@ export class DexFormats {
 		}
 		ruleTable.getTagRules();
 
+		ruleTable.resolveGameType(format, this.dex);
 		ruleTable.resolveNumbers(format, this.dex);
 
 		const canMegaEvo = this.dex.gen <= 7 || ruleTable.has('+pokemontag:past');
@@ -977,7 +1055,7 @@ export class DexFormats {
 			const subFormat = this.dex.formats.get(rule);
 			if (subFormat.exists) {
 				const value = subFormat.onValidateRule?.call(
-					{ format, ruleTable, dex: this.dex }, ruleTable.valueRules.get(rule as ID)!
+					{ format, ruleTable, dex: this.dex, rule: subFormat }, ruleTable.valueRules.get(rule as ID)!
 				);
 				if (typeof value === 'string') ruleTable.valueRules.set(subFormat.id, value);
 			}
